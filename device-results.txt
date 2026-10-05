@@ -1,0 +1,5 @@
+Native root/kernel test; zRAM minimum priority=32758
+Swapspace size: 4092k, UUID=f46c341c-93b0-4b8b-ad66-8236c009c272
+Filename				Type		Size	Used	Priority
+/dev/block/zram0                        partition	1572860	508340	32758
+Native 4MiB probe result=0

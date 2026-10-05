@@ -1,0 +1,106 @@
+PASS root with CAP_SYS_ADMIN
+Real UID 0 is required.
+PASS non-root rejected
+CAP_SYS_ADMIN is missing. UID 0 alone does not permit swapon.
+PASS UID 0 without capability rejected
+PASS default configuration
+PASS default 2GiB in four files
+Invalid numeric setting: SIZE_MB
+PASS config shell injection rejected
+PASS indivisible chunks rejected
+PASS zero chunk rejected without division
+Unknown setting: UNKNOWN
+PASS unknown configuration rejected
+PASS valid custom configuration
+PASS FBE base chosen
+PASS FBE storage path
+waiting_unlock: Waiting for user 0 encrypted storage.
+PASS locked CE does not start
+PASS locked CE did not create files
+waiting_unlock: Waiting for user 0 encrypted storage.
+PASS waiting start observes disable
+Storage encryption type unknown or absent; directory opt-in is required (ALLOW_UNENCRYPTED=0).
+PASS unknown encryption rejected by default
+PASS explicit unencrypted opt-in
+PASS configured priority preserved below zRAM
+PASS zRAM priority takes precedence
+PASS negative zRAM uses automatic priority
+PASS automatic priority verified below zRAM
+Swap priority is not below zRAM: /tmp/pocketswap-test.GCcUV1nI/high.swap. Keeping active data intact; restart after fixing priorities.
+PASS bad existing priority rejected
+Swap directory contains unowned files. Refusing to adopt it.
+PASS unowned populated directory rejected
+PASS symlink base rejected
+PASS owned directory created
+PASS owner marker recognized
+Insufficient free storage for the compatibility probe.
+PASS low free storage rejects probe
+Kernel/filesystem/SELinux rejected fast-allocated swap. No dd fallback or SELinux changes are applied.
+PASS kernel rejection aborts probe
+PASS failed probe removed when inactive
+PASS small compatibility probe
+PASS probe cleaned up
+Storage=/tmp/pocketswap-test.GCcUV1nI/ce/swap filesystem=tmpfs priority=explicit/1
+Ready chunk 0 / 2
+Ready chunk 1 / 2
+active: 128 MiB disk swap configured; zRAM is preserved.
+PASS two chunk startup
+PASS first chunk enabled
+PASS second chunk enabled
+Storage=/tmp/pocketswap-test.GCcUV1nI/ce/swap filesystem=tmpfs priority=explicit/1
+Ready chunk 0 / 2
+Ready chunk 1 / 2
+active: 128 MiB disk swap configured; zRAM is preserved.
+PASS idempotent startup
+PASS existing swaps not reformatted
+Storage=/tmp/pocketswap-test.GCcUV1nI/ce/swap filesystem=tmpfs priority=explicit/1
+error: Existing chunk count differs. Disable, reboot, unlock and purge before resizing.
+PASS online shrink rejected
+Active pages in /tmp/pocketswap-test.GCcUV1nI/ce/swap/fallback0.swap. Reboot before cleanup; avoiding a memory surge.
+Retained active swap file: /tmp/pocketswap-test.GCcUV1nI/ce/swap/fallback0.swap
+pending_cleanup: Active swap retained. Disable/remove, reboot, unlock, then run purge.
+PASS cleanup refuses to pull active pages into RAM
+PASS active file retained
+PASS active swap still enabled
+PASS idle chunk removed
+PASS zRAM remains active
+stopped: Managed disk swap is inactive. Other swap devices are unchanged.
+PASS post reboot purge
+PASS dedicated empty directory removed
+error: Owner marker missing; no files will be removed.
+PASS missing owner prevents deletion
+PASS first operation locks
+Another PocketSwap operation is running.
+PASS live operation prevents duplicate lock
+PASS lock released
+PASS stale previous boot lock recovered
+PASS large PID accepted
+PASS: 50 checks; no real swap operations performed.
+PASS recovery installation rejected
+PASS installer requires actual root
+PASS old Android installer rejected
+! Unknown legacy startup script detected; it was not changed.
+! Avoid running another swap module at the same time.
+- Script-only module: Magisk / KernelSU / APatch; no system mounts or Zygisk needed.
+- Default: 2048 MiB in four fast-allocated files, lower priority than zRAM.
+- Storage is prepared after the first unlock. Open Action to see status.
+- Configure: /tmp/pocketswap-install.NW8fwhCX/data/adb/pocketswap/config.conf
+- Disabling takes effect after reboot. Uninstall retains any swap file still holding pages.
+PASS unknown legacy does not prevent install
+PASS unknown legacy script unchanged
+PASS unknown legacy not adopted
+PASS default config installed
+- Adopting the existing four swap files; old startup script archived.
+- Script-only module: Magisk / KernelSU / APatch; no system mounts or Zygisk needed.
+- Default: 2048 MiB in four fast-allocated files, lower priority than zRAM.
+- Storage is prepared after the first unlock. Open Action to see status.
+- Configure: /tmp/pocketswap-install.NW8fwhCX/data/adb/pocketswap/config.conf
+- Disabling takes effect after reboot. Uninstall retains any swap file still holding pages.
+PASS known legacy adopted
+PASS known service removed from global boot folder
+PASS legacy backup exists
+PASS legacy disabled archive exists
+PASS adoption marker exists
+PASS config preserved during update
+PASS config symlink rejected
+PASS: 14 installer checks; real device paths unchanged.
