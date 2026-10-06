@@ -51,7 +51,7 @@ ps_pid() {
 }
 
 ps_load_config() {
-    SIZE_MB=2048 CHUNK_MB=512 PRIORITY=1 MIN_FREE_MB=1024 ALLOW_UNENCRYPTED=0
+    SIZE_MB=1024 CHUNK_MB=512 PRIORITY=1 MIN_FREE_MB=1024 ALLOW_UNENCRYPTED=0
     [ -f "$PS_STATE/config.conf" ] || return 0
     while IFS='=' read -r ps_key ps_value || [ -n "$ps_key" ]; do
         case "$ps_key" in ''|\#*) continue ;; esac
@@ -266,6 +266,51 @@ ps_prepare_file() {
         }
 }
 
+# Preflight every resize candidate before changing any file. Used swap stays intact;
+# after a reboot the kernel has no active pages here, so startup can apply the size.
+ps_reconcile_size() {
+    ps_resize_total=$((SIZE_MB / CHUNK_MB))
+    ps_resize_bytes=$((CHUNK_MB * 1048576))
+    for ps_resize_file in "$PS_BASE"/fallback*.swap; do
+        [ -e "$ps_resize_file" ] || [ -L "$ps_resize_file" ] || continue
+        ps_resize_index=${ps_resize_file##*/fallback}
+        ps_resize_index=${ps_resize_index%.swap}
+        if ! ps_uint "$ps_resize_index" || [ "$ps_resize_index" -ge 128 ] ||
+            [ -L "$ps_resize_file" ] || [ ! -f "$ps_resize_file" ] ||
+            [ "$(ps_tool stat -c %u "$ps_resize_file")" != 0 ]; then
+            ps_status error 'Unsafe existing swap file; no resize applied.'
+            return 1
+        fi
+        if [ "$ps_resize_index" -ge "$ps_resize_total" ] ||
+            [ "$(ps_tool stat -c %s "$ps_resize_file")" != "$ps_resize_bytes" ]; then
+            if ps_active "$ps_resize_file" && [ "$(ps_used_kb "$ps_resize_file")" != 0 ]; then
+                ps_status pending_resize 'Size changed; reboot and unlock to apply it. Active swap pages are preserved.'
+                return 1
+            fi
+        fi
+    done
+    for ps_resize_file in "$PS_BASE"/fallback*.swap; do
+        [ -e "$ps_resize_file" ] || continue
+        ps_resize_index=${ps_resize_file##*/fallback}
+        ps_resize_index=${ps_resize_index%.swap}
+        if [ "$ps_resize_index" -ge "$ps_resize_total" ] ||
+            [ "$(ps_tool stat -c %s "$ps_resize_file")" != "$ps_resize_bytes" ]; then
+            if ps_active "$ps_resize_file"; then
+                # Recheck usage immediately before swapoff; never deliberately pull used pages into RAM.
+                if [ "$(ps_used_kb "$ps_resize_file")" != 0 ] ||
+                    ! ps_tool swapoff "$ps_resize_file" 2>> "$PS_STATE/runtime.log"; then
+                    ps_status pending_resize 'Cannot release swap safely; reboot and unlock to apply the new size.'
+                    return 1
+                fi
+            fi
+            ps_remove_inactive "$ps_resize_file" || {
+                ps_status error 'Could not remove an inactive resize candidate.'; return 1;
+            }
+            ps_log "Removed unused resize candidate: $ps_resize_file"
+        fi
+    done
+}
+
 ps_start() {
     ps_enabled || { ps_status disabled 'Module disabled or removed.'; return 1; }
     while ! ps_unlocked; do
@@ -277,19 +322,13 @@ ps_start() {
     ps_prepare_base || { ps_status error 'Unsafe or inaccessible storage directory.'; return 1; }
     ps_pick_priority
     ps_log "Storage=$PS_BASE filesystem=$(ps_tool stat -f -c %T "$PS_BASE" 2>/dev/null) priority=$PS_PRIORITY_MODE/$PS_EFFECTIVE_PRIORITY"
+    ps_reconcile_size || return 1
+    ps_status starting "$SIZE_MB MiB disk swap requested; preparing files."
     # No probe allocation is needed when reusing verified swap files.
     if [ ! -f "$PS_BASE/fallback0.swap" ]; then
         ps_probe || { ps_status error 'Swap compatibility probe failed; see runtime.log.'; return 1; }
     fi
     ps_total=$((SIZE_MB / CHUNK_MB)) ps_index=0
-    ps_extra="$ps_total"
-    while [ "$ps_extra" -lt 128 ]; do
-        if [ -e "$PS_BASE/fallback$ps_extra.swap" ]; then
-            ps_status error 'Existing chunk count differs. Disable, reboot, unlock and purge before resizing.'
-            return 1
-        fi
-        ps_extra=$((ps_extra + 1))
-    done
     while [ "$ps_index" -lt "$ps_total" ]; do
         ps_enabled || { ps_status partial 'Disabled during startup; existing active swaps retained until reboot.'; return 1; }
         ps_prepare_file "$PS_BASE/fallback$ps_index.swap" "$((CHUNK_MB * 1048576))" &&

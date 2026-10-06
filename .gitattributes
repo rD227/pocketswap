@@ -1,0 +1,14 @@
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+module/module.prop text eol=lf
+module/config.example text eol=lf
+module/META-INF/com/google/android/update-binary text eol=lf
+module/META-INF/com/google/android/updater-script text eol=lf
+# Preserve the supplied license byte for byte, including its original line endings.
+LICENSE -text
+module/LICENSE -text
+*.zip binary

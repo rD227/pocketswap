@@ -12,8 +12,14 @@ PS_SWAPS=/proc/swaps
 ps_find_busybox
 
 if [ "$1" = status ]; then
-    printf 'PocketSwap 1.0.0\nuid=%s\nce_available=%s\nroot_manager=%s\n' "$(ps_tool id -u)" "$(ps_tool getprop sys.user.0.ce_available)" "${KSU:+KernelSU}${APATCH:+APatch}${MAGISK_VER:+Magisk}"
+    PS_VERSION=$(ps_tool awk -F= '$1 == "version" {print $2; exit}' "$PS_MODDIR/module.prop" 2>/dev/null)
+    printf 'PocketSwap %s\nuid=%s\nce_available=%s\nroot_manager=%s\n' "${PS_VERSION:-unknown}" "$(ps_tool id -u)" "$(ps_tool getprop sys.user.0.ce_available)" "${KSU:+KernelSU}${APATCH:+APatch}${MAGISK_VER:+Magisk}"
     [ ! -f "$PS_STATE/status.txt" ] || ps_tool cat "$PS_STATE/status.txt"
+    if ps_load_config; then
+        printf 'configured_disk_mib=%s (additional disk swap, excludes zRAM)\n' "$SIZE_MB"
+    fi
+    ps_tool awk 'NR > 1 {total += $3; if ($1 ~ /\/zram[0-9]+$/) zram += $3}
+        END {printf "active_zram_mib=%.0f\nactive_total_swap_mib=%.0f\n", zram/1024, total/1024}' "$PS_SWAPS"
     ps_tool cat "$PS_SWAPS"
     exit 0
 fi
@@ -28,6 +34,7 @@ if [ "$1" = uninstall ]; then
     ps_tool mkdir -p "$PS_STATE/recovery" || exit 1
     ps_tool cp "$PS_MODDIR/common.sh" "$PS_STATE/recovery/common.sh" || exit 1
     ps_tool cp "$PS_MODDIR/pocketswap.sh" "$PS_STATE/recovery/pocketswap.sh" || exit 1
+    ps_tool cp "$PS_MODDIR/module.prop" "$PS_STATE/recovery/module.prop" || exit 1
     ps_tool chmod 700 "$PS_STATE/recovery" "$PS_STATE/recovery/pocketswap.sh"
 fi
 ps_load_config || { ps_status error 'Invalid config.conf; no changes applied.'; exit 1; }

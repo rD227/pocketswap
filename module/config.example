@@ -1,5 +1,5 @@
 # Plain data only: no shell commands, spaces or inline comments.
-SIZE_MB=2048
+SIZE_MB=1024
 CHUNK_MB=512
 PRIORITY=1
 MIN_FREE_MB=1024

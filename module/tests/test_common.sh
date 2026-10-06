@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 xvsu
 # All swap operations and root identity are mocked. Never calls real swapon/swapoff.
-SOURCE=${1:-modules/pocketswap/common.sh}
+SOURCE=${1:-module/common.sh}
 . "$SOURCE" || exit 1
 TEST_ROOT=$(mktemp -d /tmp/pocketswap-test.XXXXXXXX) || exit 1
 trap 'case "$TEST_ROOT" in /tmp/pocketswap-test.*) rm -rf -- "$TEST_ROOT" ;; esac' EXIT
@@ -61,7 +61,7 @@ assert 'UID 0 without capability rejected' reject ps_root
 printf 'CapEff:\t0000000000200000\n' > "$PS_PROC/self/status"
 
 assert 'default configuration' ps_load_config
-assert 'default 2GiB in four files' test "$((SIZE_MB / CHUNK_MB))" -eq 4
+assert 'default 1GiB in two files' test "$((SIZE_MB / CHUNK_MB))" -eq 2
 printf 'SIZE_MB=$(touch /tmp/never-execute)\n' > "$PS_STATE/config.conf"
 assert 'config shell injection rejected' reject ps_load_config
 printf 'SIZE_MB=100\nCHUNK_MB=64\n' > "$PS_STATE/config.conf"
@@ -126,8 +126,45 @@ BEFORE_MKSWAP="$MOCK_MKSWAP_CALLS"
 assert 'idempotent startup' ps_start
 assert 'existing swaps not reformatted' test "$MOCK_MKSWAP_CALLS" = "$BEFORE_MKSWAP"
 SIZE_MB=64
-assert 'online shrink rejected' reject ps_start
+assert 'unused active excess chunk can shrink' ps_start
+assert 'excess chunk removed' test ! -e "$PS_BASE/fallback1.swap"
+assert 'kept chunk stays enabled' ps_active "$PS_BASE/fallback0.swap"
+assert 'shrink leaves zRAM enabled' ps_active /dev/block/zram0
 SIZE_MB=128
+assert 'growth adds missing chunk' ps_start
+truncate -s 67108864 "$PS_BASE/fallback2.swap"
+ps_enable_file "$PS_BASE/fallback2.swap"
+awk -v wanted="$PS_BASE/fallback2.swap" 'BEGIN {OFS=" "} $1 == wanted {$4=4096} {print}' "$PS_SWAPS" > "$PS_SWAPS.tmp"
+mv "$PS_SWAPS.tmp" "$PS_SWAPS"
+SIZE_MB=64
+BEFORE_SWAPOFF="$MOCK_SWAPOFF_CALLS"
+assert 'used excess chunk postpones whole resize' reject ps_start
+assert 'pending resize reported' grep -q '^state=pending_resize$' "$PS_STATE/status.txt"
+assert 'preflight keeps earlier unused excess chunk' test -f "$PS_BASE/fallback1.swap"
+assert 'preflight performs no swapoff' test "$MOCK_SWAPOFF_CALLS" = "$BEFORE_SWAPOFF"
+reset_swaps
+BEFORE_MKSWAP="$MOCK_MKSWAP_CALLS"
+assert 'post reboot shrink applies without purge' ps_start
+assert 'compatible first chunk not reformatted' test "$MOCK_MKSWAP_CALLS" = "$BEFORE_MKSWAP"
+assert 'post reboot unused chunks removed' test ! -e "$PS_BASE/fallback2.swap"
+reset_swaps
+SIZE_MB=128 CHUNK_MB=128
+assert 'inactive chunk size change recreates file' ps_start
+assert 'recreated chunk has requested size' test "$(stat -c %s "$PS_BASE/fallback0.swap")" = 134217728
+awk -v wanted="$PS_BASE/fallback0.swap" 'BEGIN {OFS=" "} $1 == wanted {$4=4096} {print}' "$PS_SWAPS" > "$PS_SWAPS.tmp"
+mv "$PS_SWAPS.tmp" "$PS_SWAPS"
+CHUNK_MB=64
+assert 'used chunk cannot be reformatted' reject ps_start
+assert 'used mismatching file preserved' test "$(stat -c %s "$PS_BASE/fallback0.swap")" = 134217728
+reset_swaps
+assert 'post reboot chunk size change applies' ps_start
+truncate -s 67108864 "$PS_BASE/fallback2.swap"
+touch "$TEST_ROOT/unrelated-file"
+ln -s "$TEST_ROOT/unrelated-file" "$PS_BASE/fallback3.swap"
+assert 'resize refuses symlink candidate' reject ps_start
+assert 'unsafe preflight keeps earlier candidate' test -f "$PS_BASE/fallback2.swap"
+assert 'symlink target untouched' test -f "$TEST_ROOT/unrelated-file"
+rm "$PS_BASE/fallback2.swap" "$PS_BASE/fallback3.swap"
 awk -v wanted="$PS_BASE/fallback0.swap" 'BEGIN {OFS=" "} $1 == wanted {$4=4096} {print}' "$PS_SWAPS" > "$PS_SWAPS.tmp"
 mv "$PS_SWAPS.tmp" "$PS_SWAPS"
 assert 'cleanup refuses to pull active pages into RAM' reject ps_cleanup_files purge

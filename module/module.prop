@@ -1,0 +1,7 @@
+id=pocketswap
+name=PocketSwap - Fallback swap
+version=1.0.3
+versionCode=10003
+author=xvsu
+description=1 GiB fallback disk swap after zRAM; unlock-aware, script-only, with capability checks and safe cleanup.
+updateJson=https://github.com/rD227/pocketswap/releases/latest/download/update.json

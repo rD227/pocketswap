@@ -10,7 +10,11 @@ PS_INSTALL_STATE=/data/adb/pocketswap
 mkdir -p "$PS_INSTALL_STATE" || abort '! Cannot create root state directory.'
 chmod 700 "$PS_INSTALL_STATE"
 [ ! -L "$PS_INSTALL_STATE/config.conf" ] || abort '! Unsafe config symlink.'
-[ -f "$PS_INSTALL_STATE/config.conf" ] || cp "$MODPATH/config.example" "$PS_INSTALL_STATE/config.conf"
+ps_config_created=0
+if [ ! -f "$PS_INSTALL_STATE/config.conf" ]; then
+    cp "$MODPATH/config.example" "$PS_INSTALL_STATE/config.conf" || abort '! Cannot create default configuration.'
+    ps_config_created=1
+fi
 chmod 600 "$PS_INSTALL_STATE/config.conf"
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 for ps_script in "$MODPATH"/*.sh; do set_perm "$ps_script" 0 0 0755; done
@@ -22,6 +26,12 @@ if [ -f "$ps_legacy" ]; then
     ps_hash=$(sha256sum "$ps_legacy" 2>/dev/null)
     ps_hash=${ps_hash%% *}
     if [ "$ps_hash" = 63610119f00454c9a2fe46f8f6e228b793391f54a144ce0726134f513a1ca7c7 ]; then
+        # A fresh state directory may still accompany the previous 2 GiB script.
+        # Preserve its capacity instead of shrinking/rewriting active swap files.
+        if [ "$ps_config_created" = 1 ]; then
+            sed -i 's/^SIZE_MB=.*/SIZE_MB=2048/; s/^CHUNK_MB=.*/CHUNK_MB=512/' "$PS_INSTALL_STATE/config.conf" || abort '! Cannot preserve legacy swap capacity.'
+            ui_print '- Preserving legacy 2048 MiB capacity; resize later using the README steps.'
+        fi
         cp "$ps_legacy" "$PS_INSTALL_STATE/legacy-service.backup" || abort '! Cannot back up old startup script.'
         touch "$PS_INSTALL_STATE/adopt-legacy"
         mv "$ps_legacy" "$PS_INSTALL_STATE/legacy-service.disabled" || abort '! Cannot archive old startup script.'
@@ -32,7 +42,8 @@ if [ -f "$ps_legacy" ]; then
     fi
 fi
 ui_print '- Script-only module: Magisk / KernelSU / APatch; no system mounts or Zygisk needed.'
-ui_print '- Default: 2048 MiB in four fast-allocated files, lower priority than zRAM.'
+ui_print '- New-install default: 1024 MiB in two files, lower priority than zRAM.'
+ui_print '- Existing configuration and adopted legacy capacity are preserved.'
 ui_print '- Storage is prepared after the first unlock. Open Action to see status.'
 ui_print '- Configure: /data/adb/pocketswap/config.conf'
 ui_print '- Disabling takes effect after reboot. Uninstall retains any swap file still holding pages.'

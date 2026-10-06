@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
 # Tests installer behavior against a temporary path, never real /data/adb.
-SOURCE=${1:-modules/pocketswap}
+SOURCE=${1:-module}
 TEST_ROOT=$(mktemp -d /tmp/pocketswap-install.XXXXXXXX) || exit 1
 trap 'case "$TEST_ROOT" in /tmp/pocketswap-install.*) rm -rf -- "$TEST_ROOT" ;; esac' EXIT
 mkdir -p "$TEST_ROOT/data/adb/service.d" "$TEST_ROOT/module"
@@ -45,6 +45,11 @@ assert 'legacy backup exists' test -f "$TEST_ROOT/data/adb/pocketswap/legacy-ser
 assert 'legacy disabled archive exists' test -f "$TEST_ROOT/data/adb/pocketswap/legacy-service.disabled"
 assert 'adoption marker exists' test -f "$TEST_ROOT/data/adb/pocketswap/adopt-legacy"
 assert 'config preserved during update' grep -qx SIZE_MB=1024 "$TEST_ROOT/data/adb/pocketswap/config.conf"
+rm "$TEST_ROOT/data/adb/pocketswap/config.conf"
+printf 'known legacy script\n' > "$TEST_ROOT/data/adb/service.d/locationspoofer_disk_swap.sh"
+assert 'fresh migration from legacy 2GiB setup' install_mock
+assert 'legacy capacity kept despite new 1GiB default' grep -qx SIZE_MB=2048 "$TEST_ROOT/data/adb/pocketswap/config.conf"
+assert 'legacy chunk size kept' grep -qx CHUNK_MB=512 "$TEST_ROOT/data/adb/pocketswap/config.conf"
 rm "$TEST_ROOT/data/adb/pocketswap/config.conf"
 ln -s "$TEST_ROOT/module/config.example" "$TEST_ROOT/data/adb/pocketswap/config.conf"
 assert 'config symlink rejected' reject install_mock

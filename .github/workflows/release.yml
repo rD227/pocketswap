@@ -1,0 +1,65 @@
+name: Build release draft
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag, e.g. v1.0.1'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pocketswap-release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Test module and release package
+        run: |
+          sh module/tests/test_common.sh module/common.sh
+          sh module/tests/test_installer.sh module
+          python -m unittest discover -s tests -v
+      - name: Build matching release assets
+        run: python tools/build_release.py --tag "$RELEASE_TAG"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pocketswap-${{ env.RELEASE_TAG }}
+          path: dist/*
+          if-no-files-found: error
+      - name: Create or update a release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            is_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)
+            if [ "$is_draft" != true ]; then
+              echo 'Refusing to replace assets of an already published release.' >&2
+              exit 1
+            fi
+            gh release edit "$RELEASE_TAG" --title "PocketSwap $RELEASE_TAG" --notes-file dist/changelog.md
+            gh release upload "$RELEASE_TAG" dist/pocketswap.zip dist/update.json dist/changelog.md dist/SHA256SUMS --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/pocketswap.zip dist/update.json dist/changelog.md dist/SHA256SUMS \
+              --verify-tag --draft --title "PocketSwap $RELEASE_TAG" --notes-file dist/changelog.md
+          fi
